@@ -580,3 +580,143 @@ Y la próxima vez que guardemos el archivo lo vamos a ver reflejado en la WSL.
 ```
 
 ---
+
+### Server Structure Refactor
+
+En la comunidad de Express no hay buenas prácticas para acomodar tu proyecto, asique vamos a ver una forma, no es la mejor pero esta forma va a funcionar de una manera correcta para este caso.
+
+![http](https://i.ibb.co/0r7TcHt/image-2024-10-17-124818297.png)
+
+Tenemos nuestro ***servidor*** en general, esto corresponde a la carpeta en donde tenemos nuestro proyecto.
+
+Tenemos la carpeta ***config*** que esta contiene todas las llaves necesarias para que podamos conectarnos con las distintas APIs.
+
+Vamos a agregar la carpeta ***route*** que va a tener los handlers que van a estar agrupados por proposito. En este momento tenemos dos archivos que manejan la autentificación, estos los podemos poner en el mismo archivo, ya que hacen cosas parecidas.
+
+
+
+La carpeta ***services***, va a tener un toque de lógica acá que ayuda a que nuestra aplicación de Express se configure de la manera correcta. Y cuando tengamos nuestro directorio de ***services***, se espera que probablemente tengamos un archivo ***passport.js*** donde vamos a poenr toda la configuración de ***passport***, como por ejemplo la declaración de `passport.use(new GoogleStrategy())`
+```
+app.get('/auth/google', passport.authenticate('google', {
+    scope: ['profile', 'email']
+})
+);
+```
+
+Esto parecer ser un ***route handler***, pero en realidad es parte de la configuracion de passport. Y passport es una clase de servicio para nuestra aplicacion.
+
+Vamos a tener otras multiples carpetas en el futuro, pero estas nos van a ayudar a settear las bases de la aplicacion.
+
+```
+const authRoutes = require('./routes/authRoutes');
+authRoutes(app);
+```
+
+Esto se puede refactorizar de una manera mas simple. Debido a que nosotros estamos declarando la variable `authRoutes` que se le esta asignando nuestros dos `route handlers` que se encuentran dentro del archivo `authRoutes`, la variable `authRoutes` es superflua, realmente no la necesitamos.
+
+`require('./routes/authRoutes')(app)`
+
+La declaracion `require` importa la funcion que se encuentra dentro de `./routes/authRoutes` y la declaracion `(app)` la ejecuta automaticamente despues de traer las funciones.
+
+### Theory of Authentication
+
+Cuando nosotros hacemos un request a un sitio web para loggearnos, este sitio web utiliza la autentificación adecuada, el problema radica, cuando nosotros queremos hacer otro request, como por ejemplo: ver los posts que hicimos en el pasado. Esto no es tan simple como que, "ah, me loggee hace rato entonces seguramente me va a reconocer", no. La validación de la autentificación está en algo que se llama cookies o mejor llamados tokens. Estos son los que nos proveen de un string único que nosotros utilizamos (por nosotros me refiero a la autentificacion por debajo) para que el servidor nos reconozca. Entonces cuando hacemos el request para entrar al servidor, nos van a asignar un token unico, el cual nosotros despues utilizariamos para acceder a otros request, como ver los posts que hicimos, nuestra listas de amigos, etc.
+
+### Cookie Based Authentication
+
+Dentro de nuestra aplicacion vamos a utiliar algo que se llama ***Cookie Based Authentication***, lo que esto significa es que cuando nos hacen un request a nuestro servidor y se quieran loggear, el cual lo pueden hacer a través de un email y password, o en este caso con Google OAuth. Después que pasan el proceso OAuth, nosotros vamos a generar una pieza de información que ayude a identificar el request. En la respuesta que nosotros envíamos para ese primer request vamos a incluír un ***header***, ***header*** va a tener la propiedad llamada `SetCookie` y va a estar configurada para ser un token random.
+
+Este token es el que va a identificar unicamente al usuario, entonces cuando el browser ve esta respuesta, y ve el header del request, va a ver que tiene la propiedad de `setCookie`, el browser automaticamente va a descomponer el token y lo va a guardar en la memoria del browser, luego el browser automaticamente va a asignar a esa cookie con cualquier request consecuente al servidor.
+
+Y así en los request que sigan, el servidor va a ver la cookie y va a decir, "ah, sos la misma persona a la cual le di este token, seguramente sos la misma", acá están los request que me estas pidiendo.
+
+La mayoría de todo el proceso de las cookies las va a manejar el browser, realmente nosotros no tenemos que hacer mucho, pero si tiene algunas desventajas que todavía no fueron especificadas.
+Lo que tenemos que saber es que el lado React de nuestra aplicación tampoco le va a importar mucho las Cookies.
+
+---
+
+### Log in
+
+Cuando nosotros queremos loggearnos a una aplicación nueva tenemos que inscribirnos y proveer de un email y password o tenemos que atravesar un proceso de OAuth.
+
+Vamos a hablar de esto empezando sobre como funciona con email y password.
+
+Vamos a hacer 2 videos, donde la primera mitad va a ser un *high-level overview* en como utilizamos OAuth para loggear a los usuarios y luego vamos a ver todo el proceso en gran, gran detalle y explicar muy bien que vamos a tener que hacer dentro de nuestra aplicación para construir esto.
+
+### Log in with email and password
+
+El usuario llega a nuestra aplicación a registrarse con email y password. Un tiempo pasa y ellos fueron desloggeados automáticamente. Este usuario se loggea con su email y password y al hacer una comparación el servidor detecta que, ya que tanto el email como el password son iguales, esta persona es loggeada. Nosotros tenemos que guardar esas dos piezas de información en algún lado dentro de nuestro servidor.
+
+Al mismo tiempo, la pieza que identifica al usuario en un modo de loggeo con email y password es que ambas credenciales sean iguales.
+
+### Log in with OAuth
+
+La diferencia con un loggeo convencional, es que en este caso al utilizar OAuth, el servidor guarda la información del usuario, pero no tiene como compararla, a diferencia de cuando se loggea con el mismo email. La única forma de compararla es con una especie de token de identificación que está en el google profile del usuario. Detecta que si, es el mismo token, confirma que es la misma persona y te deja loggear.
+
+Entonces lo que nosotros tenemos que lograr, es que en base al request del usuario, que trata de entrar, ese usuario tiene un identificador, o tendra un identificador unico que despues tenemos que utilizar para comparar si es correcto loggear al usuario o no. Es decir: si el token que nos esta entregando el request del usuario coincide con el token que nosotros teniamos de cuando hizo el loggin anteriormente, lo dejamos entrar.
+
+En este caso nosotros podriamos utilizar el email para poder identificar al usuario, y si el email del usuario coincide con el email que tenemos, lo dejaríamos entrar.
+
+Al nosotros ver la información que nos devuelve al solamente hacer un scope de `profile` e `email`, nos devolverá la ID del usuario de google, la cual es única para todos los usuarios y jamás cambiará independientemente de lo que haga el usuario.
+
+Lo que vamos a hacer nosotros es que cuando las personas entran a nuestro sitio, van a ser redirigidas a Google para loggearse con Google OAuth, después esta persona será redirigida a nuestra aplicación junto con el ID del usuario de Google, finalmente para loggearse en nuestra aplicación vamos a tomar el ID por segunda vez y lo vamos a comparar con el ID del usuario que loggeo a esa cuenta anteriormente, si la comparación resulta en iguales, lo dejamos loggear.
+
+Por último, nosotros estamos poniendo la confianza en que google jamás cambiará el ID de cada usuario. En el caso de que esto pase, realmente se rompería la aplicación y ya no se podría loggear a las cuentas.
+
+---
+
+![http](https://i.ibb.co/3dgPYVj/image-2024-10-19-185540541.png)
+
+### Flow
+
+El usuario viene hacia nuestro servidor con un ***Google Profile***, el usuario pide que lo inscribamos en nuestro sitio, luego pasa al lado ***MongoDB*** de la aplicación y vamos a crear un nuevo registro para el nuevo usuario (123). Luego a ese usuario le vamos a asignar una Cookie dentro de su cuenta y esa Cookie será enviada a el browser.
+
+Luego, el usuario puede hacer cualquier request que quiera, y cuando ellos hagan un request, nosotros vamos a poder ver que una cookie que esta asignada al usuario (123) está haciendo un request.
+
+Cuando ellos hacen click en el boton de logout, nosotros vamos a "unsettear", "invalidar" o "expirar" su cookie para desloguearlo.
+
+Lo importante pasa ahora, cuando el usuario intentá entrar nuevamente a la aplicación: el hace click en login y el nos proveerá de su google profile y nosotros lo vamos a comparar con los registros que tenemos en nuestra MongoDB, en caso de encontrar el ID de usuario, lo vamos a loggear y le vamos a settear su cookie que tenia previamente, en el caso de que no, lo inscribimos asignandole una nueva cookie.
+
+Este proceso se condensará en el primer paso, ya que cuando intente loggear, siempre lo vamos a buscar en los registros de nuestra base de datos.
+
+### Mongo DB
+
+Previamente habíamos dicho que la API de Express y de Node se van a comunicar con nuestra base de datos ***MongoDB*** para guardar registros y sacarlos.
+
+La librería llamada ***mongoose.js*** es una libreria opcional que vamos a usar en este curso, el unico objetivo de esta librería es hacernos la vida más fácil cuando trabajamos con MongoDB, generalmente es opcional, pero se recomienda mucho para automatizar ciertos procesos que vamos a estar utilizando al trabajar con ***MongoDB***.
+
+### How Mongo stores records
+
+Nuestra base de datos ***MongoDB*** puede tener muchas colecciones, esas colecciones pueden guardar muchos registros.
+En una ***instancia*** de ***MongoDB*** podríamos tener una colección de **users, posts y payments** y dentro de esas, tenemos la información de los usuarios.
+
+Cada pieza de información esencialmente es una pequeña pieza de JSON, un objeto de ***JavaScript plano***.
+
+Una de las caracteristicas que define a MongoDB es el hecho que se le refiere como "schemaless", en otras palabras, dentro de cada colección de datos, cada registro puede tener su propio set de propiedades. Entonces vamos a ver que por ejemplo, el primer record tiene la propiedad de `height` y la segunda coleccion, no la tiene.
+
+Este es un contraste directo a las base de datos tipo SQL o las bases de datos relacionales, donde tradicionalmente cada registro tiene que tener las mismas propiedades.
+
+Entonces, en las SQL o relacionales, deberia de tener definido las mismas propiedades como `ID`, `name`, `height` y `age`.
+
+Entonces esa es ***una de las diferencias que distingue a MongoDB de otras bases de datos***, como ***MySQL*** o ***Postgres***.
+
+Recordemos, tenemos muchas colecciones de datos y cada colección de datos tiene diferentes registros.
+Podemos pensarlo en cada registro como un objeto de JavaScript con un par de diferentes valores.
+
+Recién dijimos que en MongoDB tenemos un monton de colecciones diferentes y cada colección tiene diferentes registros que representan este tipo de estrucura en el mundo de JavaScript, o en el mundo de Express o NodeJS que vamos a escribir.
+
+Para eso tenemos dos conceptos importantes que son implementados por ***Mongoose***.
+
+Un `model class` creado por ***Mongoose*** representa en su totalidad una ***colección de MongoDB***, entonces el `model class` es utilizado para acceder a una colección de ***MongoDB***.
+
+Recordemos que las `model instances` son `JavaScript objects` que representan solamente un registro que se encuentra dentro de la colección.
+
+En la práctica terminamos con un `model class` representando una colección dentro de MongoDB y luego terminamos con muchas instancias, cada uno representando los records dentro de la colección de MongoDB.
+
+Entonces: un `model class` dentro de JavaScript/Mongoose es una `collection` para mongoDB.
+
+Cada `model instance` dentro de JavaScript/Mongoose, esto representa uno de los varios registros que tenemos dentro de nuestra base de datos.
+
+Por último, una `class` esta relacionada a una `collection`, tenemos un monton de `instances` de las cuales cada una representa un `individual record`.
+
+---
