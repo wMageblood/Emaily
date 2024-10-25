@@ -719,4 +719,44 @@ Cada `model instance` dentro de JavaScript/Mongoose, esto representa uno de los 
 
 Por último, una `class` esta relacionada a una `collection`, tenemos un monton de `instances` de las cuales cada una representa un `individual record`.
 
+Es mucho más fácil conseguir una versión de MongoDB que funcione cuando está hosteada remotamente, que una que trabaje en nuestra propia computadora, vamos a utilizar una third party application para hostear MongoDB.
+
+Y en nuestra computadora vamos a tener nuestra Express API y nuestra aplicación.
+
 ---
+
+### Destructuring
+
+```
+const mongoose = require('mongoose');
+```
+
+Esto puede ser escrito dela siguiente manera, utilizando ES15 destructuración.
+
+```
+const { Schema } = mongoose;
+```
+La linea de arriba explica que el objeto `mongoose` tiene una propiedad llamada `Schema`, eso es lo que indican los `{}`.
+
+Vamos a estar utiliazndo desestructuracion a traves del curso.
+
+---
+
+***Cuando utilizamos MongoDB, dijimos que no es necesario que todas las `model class` tengan las mismas propiedades. Pero, al utilizar `mongoose` digamos que estamos suprimiendo esa caracteristica, por eso requiere que nosotros definamos las propiedades por adelantado, y eso es lo que hace `Schema`***
+
+Vamos a utilizar el objeto `Schema` para crear un esquema para esta nueva `collection`.
+```
+const userSchema = new Schema({ googleId: String });
+```
+Antes habiamos visto que la googleID era un set de numeros, pero están wrappeados dentro de un string.
+
+Ahora que tenemos nuestro esquema, tenemos que crear nuestra `model class` y para eso vamos a utilizar: 
+```
+mongoose.model('users', userSchema);
+```
+
+`users` es el nombre de la `collection` y el segundo argumento es el nombre del esquema que acabamos de crear, en este caso `userSchema`
+
+Podemos agregar y sacar facilmente propiedades de nuestro esquema sin preocupacion alguna.
+
+![html](https://i.ibb.co/C6RXxzG/image-2024-10-25-161918279.png)
