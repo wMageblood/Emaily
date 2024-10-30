@@ -760,3 +760,170 @@ mongoose.model('users', userSchema);
 Podemos agregar y sacar facilmente propiedades de nuestro esquema sin preocupacion alguna.
 
 ![html](https://i.ibb.co/C6RXxzG/image-2024-10-25-161918279.png)
+
+Cuando utilicemos `mongoose model classes` no necesitamos hacer `require`. Pero puede ser que en algunos ambientes de desarrollo, nosotros tengamos que utilizar varias veces el mismo `model class`, por lo que puede resultar en que mongoose, se confunda y piense que estamos tratando de crear multiples instancias del mismo modelo. Es por eso que vamos a hacer `require`, pero de una manera distinta.
+
+---
+
+Cuando entramos a `localhost:5000/auth/google` más de una vez, en nuestra base de datos se duplica los registros y en este momento hay dos instancias del mismo usuario con el mismo `google id`, generando así un conflicto, lo que nosotros tenemos que hacer un route handler en el caso de que ya esté creado el usuario y  otro para cuando no esté creado.
+
+`user.findOne({ googleId: profile.id })` cada vez que llegamos a nuestra base de datos, hacemos una accion async, nosotros no podemos asignar le valor de `user.findOne({ googleId: profile.id })` a una variable ya que no devuelve un valor, por así decirlo, devuelve una `promise`, una `promise` es una herramienta que nosotros usamos en JavaScript para manejar código `async`, no vamos a estar utilizando mucho las promesas en este curso pero vamos a estar utilizando una caracteristica avanzada de JavaScript que fue creada en ES17 para hacer que las `promises` se vean mejor.
+
+`user.findOne({ googleId: profile.id })` devuelve una señal, o una indicación de que fue completada, vamos a chainear una declaración 
+```
+.then((existingUser) => {
+
+})
+```
+La `arrow function` va a ser llamada con cualquier usuario que fue encontrado, si es que existe.
+
+Si es que el método llamado `.findOne({})` no encuentra nada, entonces el método `.then(() => {})`, va a devolver `null`, vamos a preguntar si `existingUser` existe.
+
+```
+        user.findOne({ googleId: profile.id }).then((existingUser) => {
+            if (existingUser) {
+                // we already have a record with this profileID
+            } else {
+                // we dont have a user record with this ID, make a new record!
+                new user({ googleId: profile.id }).save();
+            }
+        })
+```
+`existingUser` es un `model instance` que representa si el `profileID` fue encontrado, ahroa si no fue encontrado, el argumento `existingUser` va a ser igual a `null`, para ver si existe podemos hacer `if (existingUser){}` *"if existingUser exists"*, significaria que ya tenemos un registro con ese `profileID`, `else` queremos crear un nuevo usuario, lo que significa que no tenemos un usuario con ese `profileID`, y ahora lo que hacemos es mover nuestra declaracion de `new user({ googleId: profile.id}).save` al `else`, para cuando no encuentre el usuario con el `profileID` que nos dieron, se cree automaticamente uno.
+
+```
+if (existingUser) {
+// we already have a record with this profileID
+done(null, existingUser);
+```
+
+Para que el workflow continue, y vuelva al proceso de autenticación, tenemos que utilizar algo llamado `done`, luego, le tenemos que pasar dos argumentos a `done`, el cual uno es `null` que representa en caso de que no lo haya encontrado, que eso se espera y que no significa un error, y luego pasarle `existingUser`, que le va a pasar el `profileID` que fue encontrado o que fue creado.
+
+Para el segundo caso, hay que hacer algo un poco mas complejo, cada vez que nosotros guardamos datos a nuestra base de datos Mongo, es una accion `async`, no queremos llamar `done` hasta que sepamos con fundamentos de que el usuario fue creado exitosamente en la base de datos, entonces para tener algo que nos de la confirmacion de que fue creado exitosamente tenemos que chainear una declaracion `.then`, este va a ser llamado con el nuevo usuario que fue recien guardado.
+
+`new user({ googleId: profile.id }).save().then(user => done(null, user));`
+
+`.then(user => done(null, user));` se va a utilizar `user` como parametro de la funcion del usuario que fue recien creado, y luego `done(null, user)`, le pasamos `null` primero y luego el usuario que fue recien guardado `user`.
+
+`new user({ googleId: profile.id })`, esto crea un nuevo `model instance`.
+`.save()` guarda la instancia.
+`.then(user => done(null, user));` esto es otro `model instance`.
+
+En este momento trabajamos con dos `model instances`, que estos representan el mismo registro dentro de nuestra coleccion, pero siempre utilizamos el que nos proveen dentro de la callback, ya que pudo haber sufrido cambios al llegar.
+
+---
+
+### Serialize User
+
+```
+passport.serializeUser((user, done) => {
+    done(null, user.id);
+});
+```
+
+`serializeUser` es una función que viene ya creada con **passport**, al nosotros pasarle una `arrow function` con los parámetros `user` y `done` podemos hacer `return` de `done` como un **callback** con los argumentos `null` que básicamente es para los errores, en caso de que haya alguno y `user.id`.
+
+`user.id` no representa el `profile.id` de **google*, está representando el identificador único que es creado en la base de datos.
+
+Esto se debe a que podemos asumir que no todas las personas van a loggear con **google**, y que todas las personas van a tener un `user.id` único que es asignado automáticamente a través de **mongoDB**.
+
+Nosotros podriamos cambiar el código de arriba y utilizar directamente el `profile.id` que se nos proveerá por **google**, pero en el caso de que alguna persona no loggee con **google**, tendríamos un problema al momento de loggearlo.
+
+---
+
+### Deserialize User
+```
+passport.deserializeUser((id, done) => {
+    user.findById(id)
+     .then(user => {
+        done(null, user)
+     });
+});
+```
+
+Atento a como escribimos `serialize` y `deserialize` ya que es fácil equivocarnos, en el caso de que nos equivoquemos, el servidor nos arrojará un error que dice ***"serialize/deserialize isn't a function"***.
+
+`deserializeUser()` es una función que el primer argumento que toma, es el token especifico que previamente habiamos asignado a la cookie, que para nosotros en este caso es el `user.id`.
+
+Entonces cuando `deserializeUser()` es llamado, vamos a obtener lo que sea que este en `user.id`, en este caso, la `id`.
+
+Luego, como siempre con **passport** tenemos que utilizar la función callback llamada `done` como segundo argumento.
+
+En el caso anterior `user` era un `model instance`, un modelo de `mongoose`, lo transformamos en `user.id` y ahora estamos haciendo exactamente lo contrario, estamos tomando un `id` y transformandolo en un `model instance`
+
+Entonces queremos buscar en toda nuestra colección de usuario que existe dentro de nuestra base de datos y luego de que encontramos un usuario particular, devolveriamos `done` con ese usuario.
+
+Primero, como queremos buscar algo dentro de nuestra base de datos, tenemos que buscarlo en nuestra `model class`, en este caso `user`.
+
+`user.findById()`, antes habiamos hecho un query asi, pero utilizando `user.findOne()`, esta nos dejo pasarle un criterio de busqueda que devolvio el primer registro que coincidia con esa criterio.
+
+`user.findById(id)`, nos deja pasarle el `id` del registro que queremos encontrar.
+
+Recordemos que acceder a la base de datos siempre es una acción `async`, entonces tenemos que asumir que nos devuelve una `promise` que será resuelta luego de que se encuentra un usuario con la `id` que se nos dió.
+
+Luego, chaineamos una declaración `.then(`, que va a ser llamada con el `model class` `user`, lo que sea que hayamos sacado de la base de datos `=> {})` y vamos a utilizar la `callback function` `done`, con el usuario que acabamos de sacar con `done(null, user);`
+```
+   .then(user => {
+    done(null, user)
+});
+```
+
+Ahora tenemos la habilidad de tomar el `user model`, `model class`. Poner algún dato identificativo dentro de la cookie, y luego sacarla y transformarla en un usuario para usarla en el futuro.
+
+Para terminar, **no podemos solamente definir serializeUser y deserializeUser**, también le tenemos que instruir a **passport** que queremos que maneje toda la autenticación utilizando cookie.
+
+Recordemos que **passport** es una librería general, muy básica para ayudarnos a manejar la autenticación.
+
+Tiene muchas maneras diferentes de trackear un usuario, una de ellas es haciendo uso de las cookies.
+
+Lo último que tenemos que hacer es indicarle a **passport** que tiene que utilizar cookies para trackear al usuario que esta actualmente loggeado.
+
+----
+
+### Enabling Cookies
+
+Fuera de la caja, Express no tiene la mas remota idea de como manejar las cookies, entonces vamos a instalar una libreria que nos ayuda en esto llamada `CookieSession` para manejar las cookies en nuestra aplicacion.
+
+Para instalarla vamos a matar nuestro servidor con `^C` y escribimos `npm install --save cookie-session`.
+
+Vamos a ir a `index.js`, recordemos que este archivo es donde hacemos el inicio de nuestra aplicación, esta sería un buen lugar para decirle a Express que tiene que utilizar cookies dentro de nuestra app, vamos a requerir dos librerias al principio del archivo.
+```
+const cookieSession = require('cookie-session');
+const passport = require('passport');
+```
+
+`const passport = require('passport');`, estuvimos diciendo que tiene que mantener track de nuestro usuario, o el estado de la autenticacion del usuario utilizando cookies, y le vamos a decir que tiene que hacer eso al habilitar las cookies, pero para que le den bola a las cookies primero tenemos que hacer uso de la libreria de `cookieSession` con `const cookieSession = require('cookie-session');`.
+
+Una es para habilitarlas `const cookieSession = require('cookie-session');`.
+
+Otro es para usarlas `const passport = require('passport');`.
+
+Con esta línea, le vamos a decir a Express que tiene que utilizar cookies en nuestra aplicación.
+
+```
+app.use(
+    cookieSession({
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+        keys: [keys.cookieKey]
+    })
+)
+```
+
+`app.use()` esta es una funcion y le vamos a pasar `cookieSession()`, vamos a llamar `cookieSession` con `()` y le vamos a pasar objetos de configuracion.
+
+En este caso, espera dos objetos: `maxAge` y `keys`
+
+`maxAge` es cuanto tiempo esta cookie puede existir en el browser antes que expire. En este caso vamos a utilizar 30 días, y el único problema aca es que espera el tiempo, en milisegundos. `30 días * 24 horas * 60 minutos * 60 segundos * 1000 milisegundos`
+
+`keys` servira para encriptar nuestra cookie, siempre que mandemos o utilicemos esta cookie, va a estar encriptada para que el usuario no pueda manualmente cambiar el `user.id` y de alguna manera, fakear que son otra persona.
+
+Realmente, siempre que vemos el objeto `keys`, deberiamos tenerlo en un lugar seguro, como en este caso `./config/keys`, y ahi la vamos a agregar.
+
+`cookieSession` nos deja definir multiples `keys` y si lo hacemos, pickeara alguna random para encriptar nuestra cookie, para mas seguridad.
+
+Lo último que tenemos que hacer, es decirle a **passport** que utilice cookies para manejar la autenticacion, y para eso vamos a agregar dos declaraciones debajo de la declaracion de cookies.
+
+```
+app.use(passport.initialize());
+app.use(passport.session());
+```
