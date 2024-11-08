@@ -927,3 +927,154 @@ Lo último que tenemos que hacer, es decirle a **passport** que utilice cookies 
 app.use(passport.initialize());
 app.use(passport.session());
 ```
+
+
+
+# A deeper Dive
+
+Primero vamos a hablar de nuestras declaraciones `app.` que pusimos en nuestro archivo `index.js`, asi que tenemos declaraciones con `app.use()` y en cada uno le pasamos un objeto totalmente diferente.
+
+Cada una de estas declaraciones están creando el middleware dentro de nuestra aplicación.
+
+`middleware` son funciones chiquitas que pueden ser usadas para modificar las solicitudes a nuestra aplicación antes que sean enviadas a nuestros `route handlers`.
+
+![html](https://i.ibb.co/ZxsVVzK/image-2024-11-04-155518752.png)
+
+Cada vez que una solicitud llega a nuestra aplicación, esa solicitud es tomada y es enviada al `cookie session middleware`.
+
+Luego, también es pasada por ambos `middlewares` de **passport**
+
+Entonces esos tres `middlewares` van a tomar la solicitud entrante y van a hacer unos ajustes chiquitos.
+
+Anteriormente dijimos que:
+
+`cookie sessions` jala información fuera de la `cookie`, o mejor dicho le saca información a la `cookie`.
+
+Luego, `passport` jala el `userID` de esa `cookie`.
+
+`middlewares` se enfocan en el pre-procesamiento de la solicitud entrante antes de que sean enviadas a los diferentes `route handlers`.
+
+Entonces es un buen lugar para poner un poco de lógica que es normal en varios route handlers.
+
+Para nuestra aplicación, es fácil asumir que queremos autenticar cada `route handler` que tenemos, porque queremos estar informados sobre cada usuario que llega a nuestra aplicación, entonces en lugar de agregar lógica a cada `route handler`, podemos simplemente agregar los `middlewares` una vez y van a ser automaticamente utilizados para cada solicitud que llega a nuestra aplicación.
+
+
+![html](https://i.ibb.co/Xb2SYBR/image-2024-11-04-161627491.png)
+
+Ahora, la primera pregunta seria, ¿qué pasa sí yo no quiero correr estos middlewares en todos los `route handlers`?
+
+Podemos configurar los `middlewares` de tal manera que solamente van a ser utilizados por una porción de nuestros `route handlers` si es que asi lo deseamos.
+
+Y vamos a ver un ejemplo pronto de esto.
+
+![html](https://i.ibb.co/J7GpMwM/image-2024-11-04-162122744.png)
+
+`request from browser:` solicitud que viene a nuestra aplicación.
+
+`app object:` es creado por la librería Express
+el request es enviado a nuestros distintos
+***middlewares*** que tenemos en nuestra aplicación.
+
+luego es enviado a los diferentes ***route handlers*** y procesamos lógica, información, u otras cosas, sea lo que sea. Formulamos una respuesta y luego la devolvemos con lo que sea que nos hayan pedido de información.
+
+---
+
+### req.session
+
+    app.get('/api/current_user', (req, res) => {
+        // res.send(req.user);
+        res.send(req.session);
+    });
+```
+{"passport":{"user":"671c23c1d837f40907f78c28"}}
+```
+
+La librería de `cookieSession` extrae la información fuera de la `cookie` y la asigna a propiedad `req.session`.
+
+Entonces `req.session` contiene la información que `passport` está intentando guardar dentro de la `cookie`.
+
+Entonces cuando le pasamos el `request object` a `passport`, en realidad no estamos viendo a la `cookie`, si no que estamos viendo internamente a `req.session`. 
+
+Entonces ve a `req.session` y saca la información relevante y la pasa todo eso a `deserializeUser` y a lo demás.
+
+No es que `passport` esté populando la información de nuestro objeto en `req.session`, si no lo que en realidad sucede es que:
+
+`res.send` con el parametro `req.session` va a llenar de información a la `cookie` y la guarda en nuestro objeto `req.session`.
+
+Para que luego `passport` venga y saque la información de la `cookie` y nos devuelva en este caso la `session` del usuario, que en este caso representa la ID única que está en la base de datos.
+
+```
+
+_id:ObjectID('671c23c1d837f40907f78c28')
+googleId:"109371441921135366693"
+__v:0
+```
+
+La librería que instalamos para manejar toda nuestra información en la `cookie` es llamada `cookieSession`.
+
+Si vamos a la documentación de express y nos fijamos como establecer sesiones dentro de nuestra aplicación express, te van a reocmendar dos librerias diferentes.
+
+Entonces vamos a hablar de la diferencia entre `cookie session` y la otra libreria llamada `express session`.
+
+Ambas librerías hacen lo mismo, pero lo hacen de una manera distinta.
+
+Ya sabemos como `cookie-session` funciona, podemos asignar una cantidad de información a la `cookie session` como middleware, y luego toma toda la informacion de la cookie y la asigna a la propiedad `req.session`.
+
+Ahora vamos a hablar sobre el middleware `express session` y porque es tan diferente.
+
+La diferencia entre `cookie-session` y `express-session` es como se guarda la información dentro de la cookie.
+
+Cuando hacemos uso de la libreria `cookie-session`, decimos que la cookie ES la `session`, esta cookie tiene toda la información con respecto a la sesión.
+
+Contiene la `userID`, entonces en nuestra aplicación: cuando queremos encontrar cual es la ID del usuario actual, buscamos en esa cookie, decodeamos el valor que está ahí y el valor exacto dentro de esa cookie es lo que vimos en el browser que se imprimió al utilizar `req.session`.
+
+### ¿Cómo funciona express-session?
+
+Esta librería se comporta de una manera diferente, express-session funciona guardando una referencia a una sesión dentro de la cookie.
+
+Entonces cuando hacemos uso de una express-session, esta va a guardar dentro de la sesión una ID.
+
+Entonces cada vez que hagamos una solicitud a express-session, esta va a tomar el ID que se encuentra dentro de esa cookie y va a buscar toda la información de la sesión, que puede contener cantidades de información arbitraria.
+
+Entonces para hacerlo más claro: `express-session` va a ver la cookie y solamente va a ver el ID, luego vamos a ir al `session store` y vamos a buscar ese ID particular y nos va a retornar un objeto que contiene toda la información relevante.
+
+La diferencia entre `cookie-session` y `express-session` es que en `cookie-session` toda la información es guardada directamente en la cookie.
+
+`express-session` guarda toda la informacion en un server remoto del lado del servidor.
+
+Entonces cuando una solicitud entra, toma la ID fuera de esa `session` y luego jala toda la informacion relevante del `session store`.
+
+![html](https://i.ibb.co/CJT3N3z/image-2024-11-04-172538919.png)
+
+
+
+---
+
+
+`cookie-session` estamos limitados a 4KB de información.
+`express-session` no estamos limitados a ningun tamano de informacion
+
+`cookie-session` lo maneja nuestro servidor, mucho mas simple de implementar.
+
+---
+
+### Dev vs Prod Keys
+
+Hay que tener un set distinto de keys para dev y para prod.
+
+Separar los environments hace que en el caso de que nos roben las credenciales del environment de dev, podamos simplemente borrar el environment y crearlo otra vez con otras credenciales.
+
+En el caso de prod, nosotros guardamos las credenciales en heroku, en nuestro casi  las guardamos en: 
+
+Esto hace que podamos tener dos data bases, y podamos experimentar en la base de datos dev.
+
+No utilizar las mismas credenciales para dev y para prod.
+
+### Authorized JavaScript origins
+### Authorized redirect URIs
+
+Como estamos tratando con un ambiente de prod, va a tener que estar linkeado con nuestra RENDER URL.
+
+ Authorized redirect URIs -> está bien que del flow de google Oauth lo redirija acá´.
+
+ Authorized JavaScript origins -> de donde el usuario va a ser redirigido al google oauth flow
