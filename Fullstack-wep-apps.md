@@ -1078,3 +1078,12 @@ Como estamos tratando con un ambiente de prod, va a tener que estar linkeado con
  Authorized redirect URIs -> está bien que del flow de google Oauth lo redirija acá´.
 
  Authorized JavaScript origins -> de donde el usuario va a ser redirigido al google oauth flow
+
+git add . -> agrega todo o por archivo especificando path
+git status -> lo que esta en cola para commitearse
+git commit -m -> commit
+git push -> para publicarlo
+
+( si lo hago desde la consola de vs code puede ser que no pida crendeciales)
+
+
