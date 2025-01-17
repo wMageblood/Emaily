@@ -1086,4 +1086,261 @@ git push -> para publicarlo
 
 ( si lo hago desde la consola de vs code puede ser que no pida crendeciales)
 
+---
+
+Access Blocked: esto se debe a que en la Google Strategy está utilizando un valor relativo, y cuando pasa a través de un proxy, que este es el caso, tiende a sacarle la "S" de "https", haciendo así que no encuentre la URL.
+
+Podriamos hacer una direccion estatica, podriamos ponerle en el `callbackURL` que nos envie a `localhost:5000/auth/google/callback` en env de dev y podriamos hacer que en env de prod nos envie a `https://emaily-661x.onrender.com/auth/google/callback` y asi no tendriamos problemas, pero tambien esto significaria que nosotros tenemos que agregar nuevos objetos en nuestros archivos de keys para que no puedan conseguir la info de la URI facilmente.
+
+Entonces para solucionar esto simplemente le tenemos que decir a passport, que vamos a pasar a traves de un proxy y que eso esta totalmente bien.
+
+Tenemos que agregar un nuevo objeto a nuestra GoogleStrategy `proxy: true`. 
+
+Con eso render y passport saben que esta OK pasar por un proxy.
+
+
+# Create React App:
+
+https://github.com/facebook/create-react-app está toda la información necesaria para que podamos utilizar imagenes, fonts, entre otras cosas que queramos para nuestro proyecto.
+
+### ¿Por qué el lado React de la aplicación tiene un servidor?
+
+Ahora tenemos un segundo server de ambiente de desarrollo, el único dolor de cabeza que nos dará esto, es cuando vamos a tratar de entender como funcionan las cosas internamente.
+
+El servidor Express solamente se encarga de jalar datos de mongoDB y expresarlos en formato JSON, o cómo atravesamos el OAuth flow, no hace nada más.
+
+El lado React va a eventualmente tomar un monton de componentes, los va a agrupar a todos utilizando Webpack y Babel y va a escupir un solo archivo `bundle.js` que va a ser cargado al browser.
+
+Entonces lo podemos ver que tenemos un server para el lado frontend, y un segundo server para toda la información diferente dentro de unestra aplicación.
+
+### ¿Por qué no podríamos utilizar Express y React en un mismo server para crear nuestra aplicación?
+
+Tranquilamente podríamos hacer eso. Podríamos decir que tenemos un servidor bien grande de Express y bien configurado y tenemos una pequeña parte de React ahí dentro. No sería lo mejor pero si se podría hacer.
+
+La razón por la cual tenemos dos servidores, es que `create-react-app` es la mejor librería que podemos utilizar para crear nuestras aplicaciones, ya que nos va a salvar de muchísimo tiempo tratando de linkear Webpack, Bable y todas las depedencias, css, etc.
+
+`create-react-app` nos salva muchisimo tiempo, vale absolutamente la pena, por eso tenemos dos servidores, la parte difícil sería nada más hacer que el servidor de Express y React se puedan comunicar fácilmente.
+
+# Running the Client and Server:
+
+Para levantar ambos servidores, tendríamos que utilizar dos ventanas de WSL y hacerlo manualmente, pero con la librería `concurrently` no tenemos esa necesidad.
+
+Esta librería se encarga de ejecutar comandos de nuestro `package.json`, haciendo así que sea mucho más sencillo levantar nuestros servidores.
+
+En nuestro `package.json` del `server` ***no del client react side***, podemos agregar dos `scripts` nuevos:\
+```
+    "server": "nodemon index.js",
+    "client": "npm run start --prefix client",
+    "dev": "concurrently \"npm run server\" \"npm run client\""`
+```
+
+`client` inicia nuestro servidor del frontend.
+`server` inicia nuestro servidor del backend.
+
+`--prefix client` se encarga de decirle al `script` que tiene que iniciar el servidor de `client`.
+
+`dev` se encarga de ejecutar ambos `scripts` con `concurrently`, los `backslash` se utilizan como carácteres de escapes, ya que si no son utilizados con comillas puede ser que el script termine antes y que ejecute cualquier cosa.
+
+`<a href="/auth/google">Sign in with Google bitch</a>`
+
+Este link es relativo, nos va a llevar a el `dominio` + `/auth/google`, es decir que si estamos en `localhost:3000`, nos va a llevar a `localhost:3000/auth/google`, esto se debe a que cuando tenemos un path relativo, siempre se va a agregar al dominio que estamos actualmente.
+
+Ahora, qué pasa cuando queremos ir a ambiente de prod, y de desarrollo?
+
+Podríamos configurarlo manualmente: `https://emaily-332x.onrender.com/auth/google` para prod y `localhost:3000/auth/google` para dev, el problema es que nosotros queremos algo más dinámico, algo que se configure solo y no tengamos que estar cambiando nosotros la URL cada vez que queramos o ir a prod, o ir a dev.
+
+Agregamos `localhost:3000/auth/google` como una URI aceptada en Google OAuth, por eso cuando voy a ese dominio, está todo bien.
+
+En prod, antes de liberar nuestra app, vamos a construir nuestro proyecto de React, React va a construir el proyecto utilizando todos los archivos js, css, todo dentro de src, va a correr `webpack` y `bundle`, para crear un proyecto final de nuestra aplicacion y ponerla en la carpeta `build`
+
+`create-react-app` no existe dentro de produccion.
+
+Cuando utilizamos relative routes, el browser se va a pre-appendear a la route que le dijimos, como puse arriba.
+
+Por features de seguridad del browser, si intentamos accedemos a `localhost:3000`, y posteriormente hacemos un request al mismo domain `localhost:3000`, el browser no va a devolver ningun problema con las cookies, ya que nuestra autenticacion es en base a cookies.
+
+Pero si nosotros estamos en el dominio `localhost:3000` y tratamos de acceder o hacerle un req a el dominio `localhost:5000`, por default no se van a aceptar las cookies y si vamos a tener un problema de autenticacion.
+
+# CORS:
+
+CORS significa ***Cross Origin Resource Sharing***, si nosotros accedemos a `localhost:3000` y hacemos un request a `localhost:3000` no va a haber ningún problema de ***CORS***. Ahora, si nosotros estamos en `localhost:3000` y hacemos un request a `localhost:5000`, se puede decir que estamos haciendo un request ***CORS***. Ya que estamos haciendole un request a otro dominio.
+
+Por cuestiones 100% de seguridad, el browser piensa que si estamos en el dominio `localhost:3000` y tratamos de hacerle un request al dominio `localhost:5000`, lo estamos haciendo con intenciones maliciosas.
+
+En este caso nosotros no nos preocupamos de los request CORS debido al proxy que estamos utilizando.
+
+---
+
+### Dominios en el ambiente de Desarrollo
+
+Nosotros hacemos el request a `localhost:3000` y este va a ser enviado al `proxy`, `proxy` va a enviar el request a `Express API` y el `Express API` va a devolver el mensaje al `proxy` y el `proxy` al browser. El `proxy` nos salva en el ambiente de desarrollo para la comunicación entre dominios.
+
+### Dominios en el ambiente de Prod
+
+Render va a proporcionar la URI y vamos a acceder al dominio correspondiente, en este caso `https://332.renderapp.com/auth/google` y como le estamos haciendo el request al mismo dominio en este caso no va a haber ningún problema CORS
+
+
+# OAuth Flow + Proxy
+
+### Dev Mode:
+
+Si especificamos un path relativo en cualquier lugar de nuestra aplicacion, el browser se va a pre-añadir a la URL.
+
+![html](https://i.ibb.co/59dgs1r/image-2024-11-14-163243493.png)
+
+Cuando nosotros llegamos al dominio `localhost:3000`, el usuario va a ver un `hyperlink` en el cual puede hacer click y el browser va a saber que como existe un path relativo, lo tiene que mandar a `localhost:3000/auth/google`.
+
+Al hacer el request, entramos al lado `CRA` con el `proxy`, y el `proxy` automaticamente va a buscar en el `package.json` o en el `setupProxy.js` para ver si tiene alguna opcion, en este caso tiene la opcion de `localhost:5000`.
+
+Cuando llega el request, el proxy se hace cargo de el y le dice al browser, ok bro, espera un toque que yo me encargo, ya que en mis opciones tengo que hacer con el.
+
+El proxy copia el request y lo manda a la nueva ruta que especificamos dentro del archivo del proxy.
+
+Este es mandado al lado `Express API`, y para aceptar el request lo manda a google, para que cuando vuelva tenga la `callback` URL que especificamos en nuestro archivo `passport.js`, en la `google strategy`.
+
+Luego lo manda otra vez antes del proxy y le dice que, todo bien.
+
+Cuando el proxy lo devuelve, lo va a devolver a `/auth/google/callback`, y nos va a devolver a `locahost:3000` no al lado del backend.
+
+Luego el usuario nos va a conceder permisos para ver su profile y para que nosotros creemos un usuario con su `profileID`, posteriormente al tener el token que nosotros guardamos en la cookie.
+
+El proxy ve el request, lo copia, y por mas de que tenga `auth/google/callback` nuestra route `auth/google` lo va a tomar. El proxy se hace cargo del request, lo copia, lo envia a la API, la API toma el codigo que esta en la URL y toma el profile, token, etc. Y cuando termina dice: ok, aca estan tus cookies, tu info, etc., estas loggeado.
+
+Express server dice ok, todo bien y te loggea.
+
+
+
+# Async Await Syntax
+
+La función `fetch` está disponible en default JavaScript en la standard library.
+
+Podemos hacer utilizar la función `fetch` para hacer requests AJAX a puntos arbitrarios desde cualquier servidor que exista.
+
+```
+function fetchPokemon() {
+    fetch('https://pokeapi.co/api/v2/pokemon')
+      .then(res => res.json())
+      .then(json => console.log(json));
+}
+
+
+fetchPokemon();
+```
+
+En este punto hicimos un tipo de request Async que devuelve una `promise`, si es exitoso podemos chainear un `.then()`, este se va a ejecutar solamente cuando el `call` es exitoso.
+
+`fetch` resuelve la `promise` con un objeto representando el `request`. Y podemos obtener la respuesta real `json` al llamarlo con `.json()`, esto devuelve `otra promise`.
+
+`.then(json => console.log(json));` despues de obtener el `json`, lo printea.
+
+### Await
+
+Primero, tenemos que localizar una función `async`, en nuestro caso la de arriba.
+
+Segundo, tenemos que poner la palabra `async` detras de la función, esto le dice al editor de código, que le vamos a pasar código `async`.
+
+Tercero tenemos que localizar todas las `promises` que son creadas en esa función.
+
+En nuestro caso son dos, `fetch` y `res.json()`, los `.then()` no se cuentan debido a que solamente funcionarían en el caso de que la `promise` sea exitosa.
+
+Ponemos `await` detras del `fetch` y borramos el `.then()` que encapsula el `res.json()` y ponemos otro `await` detrás del `res.json()`.
+
+Finalmente, asignamos el valor de `await fetch` y `await res.json()` a unos valores intermedios.
+```
+const res = await fetch()
+const json = await res.json()
+
+console.log(json);
+```
+
+En la parte de atras todo sigue funcionando de la misma manera, la palabra `await` no significa que estemos esperando algo, todo esta funcionando como debería.
+
+Simplemente que en este caso estamos guardando lo que sería un `fetch` exitoso
+
+`.then()` es reemplazado con `await`, normalmente se le designa una variable al `await` el cual el resultado era la variable que captaba el valor del resultado de la `promise`.
+
+
+# Client React Setup
+
+`index.js` Data Layer Control -- the very root of our application on the client side.
+
+Va a contener el booteo inicial para la logica del lado de React y Redux.
+
+Podemos pensar como este archivo `index.js`, como creando todas las layers de informacion iniciales, en este caso va a ser el lado redux de las cosas, entonces `index.js` va a ser todo sobre `redux`
+
+Vamos a crear un solo componente llamado `app.js`, esta es la rendering layer, o el lado `react`, esto marcará que set de componentes va a mostrar en la pantalla
+
+`index.js` lado redux | `app.js` lado react
+
+Es para separar la logica para que no se haga tan dificil de leer y confuso.
+
+`import` en lugar de `require` ya que estamos en el `frontend` y tenemos `webpack` y `babel` que tienen facilidades para acceder a ES2015
+
+`root.render(<App />, document.querySelector('#root'));`
+
+`('#root')` hace referencia al `index.html` que está en `public`, ese va a ser nuestro div principal en donde van a estar ocurriendo los cambios.
+
+Para hacer referencia a ese `div` tenemos que utilizar `document.querySelector('#root')`.
+
+
+git add . -> agrega todo o por archivo especificando path
+git status -> lo que esta en cola para commitearse
+git commit -m -> commit
+git push -> para publicarlo
+
+`redux` se encarga de todos los estados, de toda la data dentro de nuestra app.
+
+`redux-store` es en donde nuestros estados existen.
+
+Para determinar o cambiar nuestro estado, llamamos una `action creator` que despacha una action, esta action es enviada a todos los diferentes `reducers` dentro de nuestra aplicacion. Esos `reducers` combinados, combinado con la llamada del `reducer` es lo que utilizamos para actualizar el estado de nuestro `redux store`.
+
+Un `react component` va a llamar una acción al `action creator`, que va a devolver una `action`, que va a ser enviada a `reducers` que va a actualizar el `store`.
+
+`provider tag` es la plastilina que hace el bonding entre redux y react.
+
+`provider` es un componente que hace que el `store` sea accesible a cualquier componente en la aplicacion.
+
+![html](https://i.ibb.co/8zZgdFW/image-2024-11-20-154710064.png)
+
+La idea de tenerlo asi es para que podamos acceder a componentes randoms que se encuentren arbitrariamente en distintos lugares y no tengamos problemas al sacar informaciond e ahi, ya que estaria conectado con el `store` y el `provider` no está dando acceso.
+
+`const store = createStore(() => [], {}, applyMiddleware());`
+
+El `primer argumento` de `createStore` los diferentes `reducers` ( que todavia no hicimos, este es un dummy )
+El `segundo argumento` es el estado inicial de nuestra aplicacion, esto es mas importante cuando estamos haceindo server side rendering, por ahora a nosotros no nos importa entonces le vamos a pasar un objeto vacio {}
+`El tercer argumento` no tenemos nada entonces vamos a agregar applyMiddleware() e invocarlo.
+
+```
+export default function (state = {}, action) {
+    switch (action.type) {
+        default:
+            return state;
+    }
+}
+```
+`state` object, responsable del estado de la funcion
+`action` object, 
+`switch (action.type) {}` ahora mismo no tenemos ningun `type` definido dentro de nuestra app, entonces vamos a asumir que solamente tenemos un `case`, el `default case` del cual solamente vamos a devolver nuestro `state`
+
+`state` object empieza como `undefined`, entonces tenemos que ponerle un valor inicial, que puede ser un objeto `{}`.
+
+`import { BrowserRouter, Route } from 'react-router-dom';`
+
+`BrowserRouter` "brains", le dice a react-router como funcionar, ve la current URL y cambia el set de components que se ven en la pantalla en cualquier momento.
+
+`Route` react-component, es utilizado para crear una regla entre una ruta que el usuario podria llegar a visitar dentro de nuestra aplicacion y un set de componentes que son actualmente visibles en la pantalla
+
+---
+
+`<Route path="/" component={Landing} />`
+`<Route path="/surveys" component={Dashboard} />`
+
+Si accedemos al `route` `"/"`, solamente vamos a ver el texto Landing en pantalla.
+Pero si accedemos al `route `"/surveys"` vamos a ver Landing y Dashboard, esto se debe a que para react, nosotros estamos accediendo tanto a la ruta `"/"` como a la ruta `"/surveys"`, es por eso que se nos estan printeando dos componentes al mismo tiempo.
+
+Esto lo solucionamos haciendo `<Route exact={true} path="/" component={Landing} />`
+
+La propiedad `exact` es utilizada para que nos mande exactamente al route que estamos configurando.
+podemos hacer `exact = {true}` o podemos hacer `exact` solamente, y son tratadas de la misma manera
+
 
