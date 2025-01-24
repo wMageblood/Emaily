@@ -7,6 +7,9 @@ import { Provider } from 'react-redux';
 import { createStore, applyMiddleware } from 'redux';
 import reducers from './reducers';
 
+import axios from 'axios';
+window.axios = axios;
+
 
 const el = document.getElementById("root");
 const root = ReactDOM.createRoot(el);
